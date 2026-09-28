@@ -1,0 +1,295 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  MEMBER
+  CLUB_ADMIN
+  VENDOR
+}
+
+enum MembershipCategory {
+  FULL
+  JUNIOR
+  LIFE
+  ASSOCIATE
+}
+
+enum MemberStatus {
+  ACTIVE
+  EXPIRED
+  PENDING
+  SUSPENDED
+}
+
+enum ClubStatus {
+  APPROVED
+  PENDING
+  SUSPENDED
+}
+
+enum VendorStatus {
+  APPROVED
+  PENDING
+  REJECTED
+  SUSPENDED
+}
+
+enum TournamentFormat {
+  STROKE_PLAY
+  MATCH_PLAY
+  STABLEFORD
+}
+
+enum TournamentStatus {
+  UPCOMING
+  REGISTRATION_OPEN
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentType {
+  MEMBERSHIP_DUES
+  CLUB_SUBSCRIPTION
+  MARKETPLACE_ORDER
+  TOURNAMENT_ENTRY
+  VENDOR_PAYOUT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String
+  passwordHash  String?
+  role          UserRole  @default(MEMBER)
+  avatar        String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  memberProfile Member?
+  vendorProfile Vendor?
+  orders        Order[]
+  payments      PaymentTransaction[]
+}
+
+model Member {
+  id                String             @id @default(uuid())
+  userId            String             @unique
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membershipNumber  String             @unique
+  fullName          String
+  clubName          String
+  clubId            String?
+  club              Club?              @relation(fields: [clubId], references: [id])
+  zone              String
+  category          MembershipCategory @default(FULL)
+  handicapIndex     Float?             @default(18.0)
+  status            MemberStatus       @default(ACTIVE)
+  expiryDate        DateTime
+  duesPaid          Boolean            @default(false)
+  phone             String?
+  stateOfOrigin     String?
+  joinedDate        DateTime           @default(now())
+  directoryVisible  Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  handicapScores    HandicapScore[]
+  tournamentEntries TournamentEntry[]
+}
+
+model Club {
+  id                    String      @id @default(uuid())
+  name                  String
+  slug                  String      @unique
+  city                  String
+  state                 String
+  zone                  String
+  holes                 Int         @default(18)
+  par                   Int         @default(72)
+  captainName           String
+  captainEmail          String
+  captainPhone          String
+  coverImage            String?
+  status                ClubStatus  @default(APPROVED)
+  subscriptionExpiresAt DateTime
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  members               Member[]
+}
+
+model Vendor {
+  id              String        @id @default(uuid())
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName    String
+  slug            String        @unique
+  contactName     String
+  email           String
+  phone           String
+  logo            String?
+  bankName        String
+  accountNumber   String
+  accountName     String
+  status          VendorStatus  @default(APPROVED)
+  commissionRate  Float         @default(10.0)
+  totalSales      Float         @default(0.0)
+  balance         Float         @default(0.0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  products        Product[]
+}
+
+model Product {
+  id              String      @id @default(uuid())
+  vendorId        String
+  vendor          Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  title           String
+  slug            String      @unique
+  description     String
+  price           Float
+  compareAtPrice  Float?
+  category        String
+  inventory       Int         @default(0)
+  images          String[]
+  featured        Boolean     @default(false)
+  rating          Float?      @default(5.0)
+  reviewsCount    Int         @default(0)
+  tags            String[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  orderItems      OrderItem[]
+}
+
+model Order {
+  id                String        @id @default(uuid())
+  orderNumber       String        @unique
+  userId            String
+  user              User          @relation(fields: [userId], references: [id])
+  customerName      String
+  customerEmail     String
+  customerPhone     String
+  shippingAddress   String
+  city              String
+  state             String
+  totalAmount       Float
+  commissionAmount  Float
+  status            OrderStatus   @default(PAID)
+  paymentReference  String        @unique
+  trackingNumber    String?
+  courierName       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  items             OrderItem[]
+}
+
+model OrderItem {
+  id          String    @id @default(uuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  price       Float
+  quantity    Int       @default(1)
+}
+
+model PaymentTransaction {
+  id          String        @id @default(uuid())
+  reference   String        @unique
+  userId      String?
+  user        User?         @relation(fields: [userId], references: [id])
+  userName    String
+  userEmail   String
+  amount      Float
+  type        PaymentType
+  status      PaymentStatus @default(SUCCESS)
+  channel     String?
+  createdAt   DateTime      @default(now())
+}
+
+model Tournament {
+  id                    String            @id @default(uuid())
+  slug                  String            @unique
+  title                 String
+  subtitle              String?
+  format                TournamentFormat  @default(STROKE_PLAY)
+  location              String
+  venueClubName         String?
+  startDate             DateTime
+  endDate               DateTime
+  entryFee              Float             @default(0.0)
+  maxParticipants       Int               @default(120)
+  registeredCount       Int               @default(0)
+  registrationDeadline  DateTime
+  status                TournamentStatus  @default(UPCOMING)
+  description           String
+  coverImage            String?
+  rules                 String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  entries               TournamentEntry[]
+}
+
+model TournamentEntry {
+  id            String      @id @default(uuid())
+  tournamentId  String
+  tournament    Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  registeredAt  DateTime    @default(now())
+  grossScoreR1  Int?
+  grossScoreR2  Int?
+  grossScoreR3  Int?
+  totalGross    Int?
+  totalNet      Int?
+}
+
+model HandicapScore {
+  id            String    @id @default(uuid())
+  memberId      String
+  member        Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  date          DateTime
+  courseName    String
+  grossScore    Int
+  courseRating  Float
+  slopeRating   Int
+  differential  Float
+  attesterName  String
+  createdAt     DateTime  @default(now())
+}
+
+model Announcement {
+  id          String    @id @default(uuid())
+  title       String
+  content     String
+  targetRole  String?   @default("ALL")
+  priority    String    @default("HIGH")
+  publishedAt DateTime  @default(now())
+}
